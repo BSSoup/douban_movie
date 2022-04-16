@@ -20,7 +20,7 @@ users = ["user1", "user2"]  #填写豆瓣的id，多个账号请用逗号分隔
 wish_time = 5 # 设置想要的检索日期天数(day)
 # 设置Emby库信息
 embykey = "xxxxx"   #设置emby库的key信息,如之前未设置需要去emby管理页面设置新增
-emby_address="http://地址:端口"  #此处地址可以设置内网地址也可以设置外网地址，内网地址则只能在内网访问和运行
+emby_address="http://地址:端口/emby/users/user代码/Items?Recursive=true&IncludeItemTypes="  #此处地址可以设置内网地址也可以设置外网地址，内网地址则只能在内网访问和运行
 # 设置音丝范资源清晰度检索顺序,运行时候会按清晰度顺序检索,冒号后面的值表示下载时候会选取该清晰度下最接近该数字的资源大小（GB）下载
 check_order = {"4K": 20, "蓝光原盘": 20, "蓝光高清": 10, "WEB-DL": 10}
 # 定义tr的访问信息
