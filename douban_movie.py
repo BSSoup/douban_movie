@@ -568,13 +568,12 @@ def notice_push(douban, emby, checklist):
     }
     requests.post(url, data=data)
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# 主函数
+
 notice_download_name = []
 notice_douban = []
 douban = douban(users, wish_time)
 emby = emby(embykey)
 checklist = checkinfo(douban, emby)
-print("待检索的清单如下：", checklist)
 pianyuan_cookie()
 downloader(checklist)
 notice_push(douban, emby, checklist)
