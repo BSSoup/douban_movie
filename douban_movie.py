@@ -1,6 +1,6 @@
 # coding = utf-8
 # vesion =1.6，对各模块用独立函数定义,下载器更改为TR下载，增加新的资源站，增加多豆瓣账号支持，对部分站点增加电影清晰度和资源大小选择偏好。
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# **************************************************************************************************************************************
 # 依赖库
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -13,27 +13,28 @@ from bs4 import BeautifulSoup
 import json
 # transmission的依赖
 import transmissionrpc
-# **************************************************************************************************************
-# 基础信息设置(以下信息需要在运行前手动设置）
-# 设置豆瓣账号信息
-users = ["user1", "user2"]  #填写豆瓣的id，多个账号请用逗号分隔
-wish_time = 5 # 设置想要的检索日期天数(day)
-# 设置Emby库信息
-embykey = "xxxxx"   #设置emby库的key信息,如之前未设置需要去emby管理页面设置新增
-emby_address="http://地址:端口/emby/users/user代码/Items?Recursive=true&IncludeItemTypes="  #此处地址可以设置内网地址也可以设置外网地址，内网地址则只能在内网访问和运行
+#人人影视的依赖
+import sqlite3
+
+# **************************************************************************************************************************************
+# 基础信息设置
+# 设置豆瓣账号信息，多个账号请用逗号分隔
+users = ["user1", "user2"]
+# 设置想要的检索日期天数(day)
+wish_time =50
+# 设置emby库的key信息
+embykey = "embykey"
 # 设置音丝范资源清晰度检索顺序,运行时候会按清晰度顺序检索,冒号后面的值表示下载时候会选取该清晰度下最接近该数字的资源大小（GB）下载
-check_order = {"4K": 20, "蓝光原盘": 20, "蓝光高清": 10, "WEB-DL": 10}
-# 定义tr的访问信息
-tr_address = 'xxxxxx' #设置Tr的调用地址
-tr_port = 9091  #设置Tr的调用端口，通常为9091，不是则改掉
-tr_user = 'xxx'  #设置tr的登录用户名
-tr_password = 'xxxxxx' #设置Tr的登录密码
-out_path = r'/volumeUSB1/usbshare/torrents'  # 下临时种子载保存地址（已经取消种子下载方式，设置无效，可不管）
-#设置微信推送端口信息
-push_token="xxxxxxxxxxxx" #设置push-plus的群组或个人token
-push_title="xxxxxxxxx"   #设置推送时候显示的标题名称
-push_topic="xxxxxxxx"   #群组推送时需要设置，设置对应的群组名称，如果只推送给个人无需设置
-# ***************************************************************************************************************
+check_order = {"WEB-DL": 5,"蓝光高清": 8,"4K": 12, "蓝光原盘": 15}
+#设置人人影视资源大小（GB）和清晰度搜索的顺序，人人影视的搜索是基于数据库的资源搜索，时效性有限，主要针对以前的资源。
+yyest_checkorder={"BD-1080P": 5,"MP4": 5,"4K-2160P": 12, "BD-720P": 3,"HR-HDTV":3}
+# 定义tr的访问地址、账号和密码（如有）
+tr_address = '192.168.199.174'
+tr_port = 9091
+tr_user = 'username'
+tr_password = 'password'
+out_path = r'/volumeUSB1/usbshare/torrents'  # 下载保存地址（已经取消种子下载方式，设置无效）
+# **************************************************************************************************************************************
 # charmdriver设置
 prefs = {'profile.default_content_settings.popups': 0, 'download.default_directory': out_path}
 options = webdriver.ChromeOptions()
@@ -43,8 +44,9 @@ options.add_argument('--headless')
 options.add_argument('--disable-gpu')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
-browser = webdriver.Remote("http://172.17.0.7:4444/wd/hub", options=options)
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+browser = webdriver.Remote("http://172.17.0.3:4444/wd/hub", options=options)
+
+# **************************************************************************************************************************************
 # 定义豆瓣函数，打开豆瓣,返回想要的电影信息（包括电影名称）
 def douban(user, wish_time):
     for user in users:
@@ -82,17 +84,18 @@ def douban(user, wish_time):
                     # 识别电影剧标题
                     x = title[j].text
                     x = x.split("/")[0]
+                    x = x.split("[")[0]
                     x = x[:-1]
                     titles.append(x)
                     print("电影标题：%s" % titles[j])
                     # 识别电影剧上映日期
-                    # y = intros[j].text
-                    # y = y[0:4]
-                    # if y.isdigit():
-                    #    year.append(y)
-                    # else:
-                    #    year.append(None)
-                    # print("上映日期：%s" % year[j])
+                    y = intros[j].text
+                    y = y[0:4]
+                    if y.isdigit():
+                        year.append(y)
+                    else:
+                        year.append(None)
+                    print("上映日期：%s" % year[j])
                     # 识别加入想看日期
                     z = dates[j].text
                     print("加入日期%s" % z)
@@ -110,17 +113,19 @@ def douban(user, wish_time):
         #    if year[i] == None:
         #        notice_user.append(titles[i])
         #    else:
-        #        notice_user.append(str(str(titles[i]) + "(" + str(year[i]) + ")"))
+        #        notice_user.append(str(str(titles[i]) + "("+str(year[i]) + ")"))
         # notice_douban.append(notice_user)
         notice_douban.append(titles)
+        notice_douban.append(year)
     return notice_douban
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# **************************************************************************************************************************************
 # 定义emby函数，打开Emby,获取Emby上的电影和电视剧信息
 def emby(embykey):
     emby = []
-    # 定义电影和电视剧的api接口
-    url1 = emby_address+"/emby/users/bc3b0d5386444f27b836b0617fd43428/Items?Recursive=true&IncludeItemTypes=Movie&api_key=" + embykey
-    url2 = emby_address+ "/emby/users/bc3b0d5386444f27b836b0617fd43428/Items?Recursive=true&IncludeItemTypes=Episode&api_key=" + embykey
+    # 定义电影和电视剧的api接口(接口可以自己尝试，找到自己emby库的访问接口地址。
+    url1 = "http://192.168.199.174:8096/emby/users/bc3b0d5386444f27b836b0617fd43428/Items?Recursive=true&IncludeItemTypes=Movie&api_key="+embykey
+    url2 = "http://192.168.199.174:8096/emby/users/bc3b0d5386444f27b836b0617fd43428/Items?Recursive=true&IncludeItemTypes=Episode&api_key="+embykey
+
     # 读取网页内容
     html1 = urlopen(url1)
     html2 = urlopen(url2)
@@ -159,6 +164,7 @@ def emby(embykey):
         if y == 0:
             break
     b2 = json.loads(a2[e1:1 - e2])
+
     # 将电影和电视剧列表中字典里面的Name下的值单独抽取，组成电影和电视剧名字的列表
     for i in range(len(b1)):
         emby_movie_list.append(b1[i]["Name"])
@@ -173,16 +179,23 @@ def emby(embykey):
     emby.append(emby_movie_list)
     emby.append(emby_Episode_list)
     return emby
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+# **************************************************************************************************************************************
 # 定义对比函数，对比豆瓣想看和emby库的电影/电视剧,对输入的两个list,返回list1中不在list2中的值
 def checkinfo(douban, emby):
-    search_list = []
-    for i in range(0, len(users), 1):
+    print(douban)
+    search_list=[]
+    for i in range(0, len(users) * 2, 2):
         for j in range(0, len(douban[i]), 1):
             if (douban[i][j] not in emby[0]) & (douban[i][j] not in emby[1]):
+                #if douban[i + 1][j] is None:
+                    #name = str(douban[i][j])
+                #else:
+                    #name = str(douban[i][j]) + str(" (") + str(douban[i + 1][j]) + str(")")
                 search_list.append(douban[i][j])
+    print(search_list)
     return search_list
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# **************************************************************************************************************************************
 def pianyuan_cookie():
     # 打开片源网主页
     browser.get('https://pianyuan.org/')
@@ -208,7 +221,88 @@ def pianyuan_cookie():
     # 刷新网页
     browser.get('https://pianyuan.org/')
     return None
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# **************************************************************************************************************************************
+#定义人人影视资源搜索
+def yyest(movie_name):
+    download_result = 0
+    con = sqlite3.connect(r"yyets_sqlite.db")
+    # con.execute('drop table comment')
+    cursor = con.cursor()
+    sql = "select * from yyets where cnname='"+movie_name+"'"
+    try:
+        cursor.execute(sql)
+        name = cursor.fetchone()
+        print(type(name))
+    except Exception as e:
+        print(e)
+        print('error')
+    finally:
+        cursor.close()
+        con.close()
+    result_name = []
+    result_size = []
+    result_add = []
+    try:
+        temp_result = name[4]
+        x = str(temp_result)
+        sss = eee = 0
+        for i in range(len(x)):
+            if temp_result[i:i + 8] == '"items":':
+                sss = i
+                # print('+++++')
+            if temp_result[i:i + 10] == '"formats":':
+                eee = i
+                # print("-------")
+        if (sss != 0) & (eee != 0):
+            x = x[sss + 9:eee - 2]
+        else:
+            print("数据拆解错误，请检查程序")
+        xx = json.loads(x)
+        yy = list(xx.keys())
+        for key in yyest_checkorder.keys():
+            yyy = yyest_checkorder[key]
+            if key in yy:
+                zz = xx[key]
+            break
+        # zz=str(zz)[1:-1]
+        # zz=json.loads(zz)
+        for m in zz:
+            result_name.append(m['name'])
+            result_size.append(m['size'])
+            dd = str(m['files'])[1:-1]
+            for i in range(len(dd)):
+                if dd[i:i + 10] == "'address':":
+                    dd1 = i
+                if dd[i:i + 9] == "'passwd':":
+                    dd2 = i
+            dd = dd[dd1 + 12:dd2 - 3]
+            result_add.append(dd)
+        for j in range(len(result_size)):
+            if result_size[j] != '0':
+                result_size[j] = float(result_size[j][:-2])
+            else:
+                result_size[j] = 0
+        print(result_name)
+        print(result_size)
+        print(result_add)
+        find_minindex = []
+        for i in result_size:
+            find_minindex.append(abs(i - yyy))
+        min_index = find_minindex.index(min(find_minindex))
+        zzz=str(result_add(min_index))
+        if zzz[0:6] == "magnet:":
+            # 调用tr下载
+            tc = transmissionrpc.Client(address=tr_address, port=tr_port, user=tr_user, password=tr_password)
+            tc.add_torrent(torrent=result_add[min_index])
+            notice_download_name.append(movie_name)
+            print("YYeTs清晰度为 %s 的资源存在，开始下载该资源，不再检索其他清晰度" % key)
+            print("YYeTs资源成功添加下载，开始检索下一步电影")
+            download_result = 2
+        else:
+            print("资源非磁力连接")
+    except:
+        print("所查找资源没有")
+    return download_result
 # 定义片源网资源搜索函
 def pianyuan(movie_name):
     download_result = 0
@@ -364,10 +458,15 @@ def pianyuan(movie_name):
     except:
         print("异常或无资源")
     return download_result
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+# **************************************************************************************************************************************
 # 定义音丝范资源索引函数
 def yinsifan(movie_name):
     # 打开音丝范搜索资源
+    if list(movie_name)[-1] == ")":
+        movie_name=movie_name[:-6]
+    else:
+        movie_name=movie_name
     url = "https://www.yinfans.me/?s=" + str(movie_name)
     download_result = 0
     browser.get(url)
@@ -423,8 +522,9 @@ def yinsifan(movie_name):
     except:
         print("异常或无资源")
     return download_result
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#定义grab4k资源搜索函数
+
+# *********************************************************************************************************************************
+#定义Grab4k资源搜索函数
 def garb4k(movie_name):
     # 打开grab4k搜索资源
     url = "https://www.grab4k.com/vod/search.html?wd=" + str(movie_name)
@@ -436,6 +536,7 @@ def garb4k(movie_name):
     sizes_languang=[]
     sizes_1080p=[]
     browser.get(url)
+    browser.implicitly_wait(10)
     try:
         # 确认搜索是否有资源
         browser.find_element_by_class_name("video-serial").click()
@@ -501,74 +602,86 @@ def garb4k(movie_name):
                 tc = transmissionrpc.Client(address=tr_address, port=tr_port, user=tr_user, password=tr_password)
                 tc.add_torrent(torrent=magenets_4k[min_size])
                 download_result = 2
+                notice_download_name.append(movie_name)
                 print("4K资源下载成功")
             elif (len(sizes_4k) == 0) & (len(sizes_languang) != 0):
                 min_size = sizes_languang.index(min(sizes_languang))
                 tc = transmissionrpc.Client(address=tr_address, port=tr_port, user=tr_user, password=tr_password)
                 tc.add_torrent(torrent=magenets_languang[min_size])
                 download_result = 2
+                notice_download_name.append(movie_name)
                 print("蓝光资源下载成功")
             elif (len(sizes_4k) == 0) & (len(sizes_languang) == 0) & (len(sizes_1080p) != 0):
                 max_size = sizes_1080p.index(max(sizes_1080p))
                 tc = transmissionrpc.Client(address=tr_address, port=tr_port, user=tr_user, password=tr_password)
                 tc.add_torrent(torrent=magenets_1080p[max_size])
                 download_result = 2
+                notice_download_name.append(movie_name)
                 print("1080P资源下载成功")
         except:
             print("异常或无资源")
     except:
         pass
     return download_result
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+# **************************************************************************************************************************************
 # 对searchlist的电影/电视剧 进行资源搜索,并将检索到的资源加入TR下载
 def downloader(search_list):
     for i in range(len(search_list)):
-        movie_name=search_list[i]
-        print("开始检索电影/电视：", movie_name)
+        movie_name = search_list[i]
+        print("****************************")
+        print("开始检索电影/电视：",movie_name)
         if pianyuan(movie_name) == 0:
-            print("片源网没找到资源")
-            if yinsifan(movie_name)==0:
-                print("音丝范没找到资源")
-                if garb4k(movie_name) ==0:
-                    print("grab4k没有找到资源")
+            print("片源网没有这个资源")
+            if yyest(movie_name) == 0:
+                print("人人影视数据库没有该资源")
+                if garb4k(movie_name) == 0:
+                    print("GRAB4k没有找到资源")
+                    if yinsifan(movie_name) == 0:
+                        print("音丝范没有这个资源")
+                    else:
+                        continue
                 else:
                     continue
             else:
                 continue
         else:
             continue
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# **************************************************************************************************************************************
 # 消息推送函数
 def notice_push(douban, emby, checklist):
     # 推送下载情况到手机端
     # 豆瓣新加入信息
     str_notice_douban = ""
-    for i in range(0, len(users), 1):
-        str_notice_douban = str_notice_douban + str(users[i]) + "新加入豆瓣想看的电影/电视剧： " + "\n"
+    for i in range(0, len(users)*2, 2):
+        str_notice_douban = str_notice_douban + str(users[int(i/2)]) + "加入豆瓣想看的电影/电视剧： " + "\n"
         for j in range(0, len(douban[i]), 1):
-            str_notice_douban = str_notice_douban + str(douban[i][j]) + "\n"
+            str_notice_douban = str_notice_douban + "《"+str(douban[i][j]) +"("+str(douban[i+1][j])+")"+"》"+ "\n"
     # 不在本地库的信息
     str_notice_notin_emby_name = ''
     for i in range(0, len(checklist), 1):
-        str_notice_notin_emby_name = str_notice_notin_emby_name + str(checklist[i]) + "\n"
+        str_notice_notin_emby_name = str_notice_notin_emby_name + "《"+str(checklist[i]) + "》"+"\n"
     # 下载成功信息
     str_notice_download_name = ""
     for i in range(0, len(notice_download_name), 1):
-        str_notice_download_name = str_notice_download_name + str(notice_download_name[i]) + "\n"
+        str_notice_download_name = str_notice_download_name + "《"+str(notice_download_name[i]) +"》"+ "\n"
+
     cont = "最近" + str(
         wish_time) + "天:" + "\n" + str_notice_douban + "\n" + "其中不在EMBY库的有:" + "\n" + str_notice_notin_emby_name + "\n" + "此次检索下载成功的有：" + "\n" + str_notice_download_name
     content = {cont}
     url = 'http://www.pushplus.plus/send'
+    #填写清楚pushplus的基本信息（token、notice name 、群组名字
     data = {
-        "token": push_token,
-        "title": push_title,
+        "token": "push token",
+        "title": "notice name",
         "content": content,
-        "topic": push_topic,
+        "topic": "群组名字",
         "template": "json"
     }
     requests.post(url, data=data)
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+# **************************************************************************************************************************************
+# 主函数
 notice_download_name = []
 notice_douban = []
 douban = douban(users, wish_time)
@@ -579,3 +692,4 @@ downloader(checklist)
 notice_push(douban, emby, checklist)
 print('本次运行结束，等待下次运行')
 browser.quit()
+# **************************************************************************************************************************************
