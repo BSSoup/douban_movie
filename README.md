@@ -15,3 +15,5 @@
 （如图片不显示直接下载文件，里面有教程截图）
 
 ![iamge](https://github.com/BSSoup/douban_movie/blob/main/%E5%BC%A0%E5%A4%A7%E5%A6%88%E6%9C%AA%E8%BF%87%E5%AE%A1%E6%95%99%E7%A8%8B%E6%88%AA%E5%9B%BE.jpg)
+
+2022-6-14更新：增加人人影视的资源（用的人人影视数据库，可自己到人人影视网站下载更新数据库）
